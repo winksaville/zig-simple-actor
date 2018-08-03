@@ -1,14 +1,18 @@
 # Zig Actor
 
-Create an Actor that processes messages.
+Actors are independent components of computation. In the
+typical usage actors communicate via messages and do not
+share any data. [See Actor Model](https://en.wikipedia.org/wiki/Actor_model)
+for more information.
 
-Currently the type ActorPtr is \*@OpaqueType as it represents any possible
-type of Actor. But as it's an opaque pointer it needs to be cast or a
-different type so I can call "actor.processMessage" in the broadcastLoop.
+A key to the implementation was to create an `ActorInterface` as suggested
+by MajorLag on IRC, https://irclog.whitequark.org/zig/2018-08-03#22735193.
 
 ## Test
 ```bash
 $ zig test actor.zig
+Test 1/1 Actor...OK
+All tests passed.
 ```
 
 ## Clean

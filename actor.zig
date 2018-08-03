@@ -3,14 +3,19 @@ const assert = std.debug.assert;
 const warn = std.debug.warn;
 const Queue = std.atomic.Queue;
 
-// ActorInterface is a member of all Actor's and
-// every Actor must implement processMessage who's
-// address is saved in this interface.
+/// ActorInterface is a member of all Actor's and
+/// every Actor must implement processMessage who's
+/// address is saved in this interface when an Actor
+/// is initialized by calling Actor(BodyType).init().
+///
+/// There must also be a BodyType.init(*Actor(BodyType))
 pub const ActorInterface = packed struct {
     pub processMessage: fn (actorInterface: *ActorInterface, msg: *Message) void,
 };
 
-// Actor that can process messages
+/// Actor that can process messages. Actors implement
+/// processMessage in the BodyType passed to this Actor
+/// Type Constructor.
 pub fn Actor(comptime BodyType: type) type {
     return packed struct {
         const Self = this;
@@ -33,7 +38,7 @@ pub fn Actor(comptime BodyType: type) type {
     };
 }
 
-// Dispatches messages to actors
+/// Dispatches messages to actors
 pub fn ActorDispatcher(comptime maxActors: usize) type {
     return struct {
         const Self = this;
@@ -80,12 +85,12 @@ pub fn ActorDispatcher(comptime maxActors: usize) type {
     };
 }
 
-// A message
+/// A message with a cmd and other fields in the future
 pub const Message = struct {
     pub cmd: u64,
 };
 
-// An ActorBody
+/// An ActorBody which must implement init and processMessage
 const MyActorBody = packed struct {
     const Self = this;
 
@@ -96,7 +101,6 @@ const MyActorBody = packed struct {
     }
 
     pub fn processMessage(aiPtr: *ActorInterface, msg: *Message) void {
-        //var self = @fieldParentPtr(Self, "interface", aiPtr);
         var self = Actor(MyActorBody).getActorPtr(aiPtr);
         //warn("processMessage: aiPtr={*} self={*}\n", aiPtr, self);
         self.body.count += msg.cmd;

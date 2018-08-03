@@ -3,19 +3,34 @@ const assert = std.debug.assert;
 const warn = std.debug.warn;
 const Queue = std.atomic.Queue;
 
+// ActorInterface is a member of all Actor's and
+// every Actor must implement processMessage who's
+// address is saved in this interface.
+pub const ActorInterface = packed struct {
+    actor_offset: usize,
+    pub processMessage: fn (actorInterface: *ActorInterface, msg: *Message) void,
+};
+
 // Actor that can process messages
 pub fn Actor(comptime BodyType: type) type {
     return packed struct {
         const Self = this;
 
+        pub interface: ActorInterface,
         pub body: BodyType,
-        pub processMessage: fn (self: *Self, msg: *Message) void,
 
         pub fn init() Self {
             var self: Self = undefined;
-            self.processMessage = BodyType.processMessage;
+            //warn("Actor.init: aiPtr={*} self={*}\n", &self.interface, &self);
+            self.interface.actor_offset = @ptrToInt(&self.interface) - @ptrToInt(&self);
+            self.interface.processMessage = BodyType.processMessage;
             BodyType.init(&self);
             return self;
+        }
+
+        /// Return a pointer to the Actor this interface is a member of.
+        pub fn getActorPtr(aiPtr: *ActorInterface) *Self {
+            return @intToPtr(*Self, @ptrToInt(aiPtr) - aiPtr.actor_offset);
         }
     };
 }
@@ -32,8 +47,7 @@ pub fn ActorDispatcher(comptime maxActors: usize) type {
 
         // What type should ActorPtr be or how do I cast it
         // so I can call actor.processMessage
-        const ActorPtr = *@OpaqueType();
-        pub actors: [maxActors]ActorPtr,
+        pub actors: [maxActors]*ActorInterface,
         pub actors_count: u64,
 
         pub fn init() Self {
@@ -48,9 +62,9 @@ pub fn ActorDispatcher(comptime maxActors: usize) type {
         }
 
         /// NOT thread safe
-        pub fn add(self: *Self, actorPtr: var) !void {
+        pub fn add(self: *Self, actorInterface: *ActorInterface) !void {
             if (self.actors_count >= self.actors.len) return error.TooManyActors;
-            self.actors[self.actors_count] = @ptrCast(ActorPtr, actorPtr);
+            self.actors[self.actors_count] = actorInterface;
             self.actors_count += 1;
         }
 
@@ -59,10 +73,9 @@ pub fn ActorDispatcher(comptime maxActors: usize) type {
                 var pMsgNode = self.queue.get() orelse return;
                 self.msg_count += 1;
                 self.last_msg_cmd = pMsgNode.data.cmd;
-                for (self.actors) |actor| {
+                for (self.actors) |aiPtr| {
                     self.actor_processMessage_count += 1;
-                    // Compile error because ActorPtr isn't correct.
-                    //actor.processMessage(actor, pMsgNode.data);
+                    aiPtr.processMessage(aiPtr, pMsgNode.data);
                 }
             }
         }
@@ -84,7 +97,9 @@ const MyActorBody = packed struct {
         self.body.count = 0;
     }
 
-    pub fn processMessage(self: *Actor(MyActorBody), msg: *Message) void {
+    pub fn processMessage(aiPtr: *ActorInterface, msg: *Message) void {
+        var self = Actor(MyActorBody).getActorPtr(aiPtr);
+        //warn("processMessage: aiPtr={*} self={*}\n", aiPtr, self);
         self.body.count += msg.cmd;
     }
 };
@@ -99,9 +114,9 @@ test "Actor" {
     assert(msg.cmd == 123);
 
     // Test that the actor works
-    myActor.processMessage(&myActor, &msg);
-    assert(myActor.body.count == 123);
-    myActor.processMessage(&myActor, &msg);
+    myActor.interface.processMessage(&myActor.interface, &msg);
+    assert(myActor.body.count == 1 * 123);
+    myActor.interface.processMessage(&myActor.interface, &msg);
     assert(myActor.body.count == 2 * 123);
 
     // Create a dispatcher
@@ -109,7 +124,7 @@ test "Actor" {
     assert(dispatcher.msg_count == 0);
 
     // Add the actor
-    try dispatcher.add(&myActor);
+    try dispatcher.add(&myActor.interface);
 
     // Create a node with a pointer to a message
     var node0 = @typeOf(dispatcher.queue).Node {
@@ -123,8 +138,5 @@ test "Actor" {
     assert(dispatcher.last_msg_cmd == 123);
     assert(dispatcher.msg_count == 1);
     assert(dispatcher.actor_processMessage_count == 1);
-
-    // This doesn't work because dispatcher isn't able
-    // call MyActorBody.processMessage
-    //assert(myActor.body.count == 3 * 123);
+    assert(myActor.body.count == 3 * 123);
 }

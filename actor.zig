@@ -7,7 +7,6 @@ const Queue = std.atomic.Queue;
 // every Actor must implement processMessage who's
 // address is saved in this interface.
 pub const ActorInterface = packed struct {
-    actor_offset: usize,
     pub processMessage: fn (actorInterface: *ActorInterface, msg: *Message) void,
 };
 
@@ -22,7 +21,6 @@ pub fn Actor(comptime BodyType: type) type {
         pub fn init() Self {
             var self: Self = undefined;
             //warn("Actor.init: aiPtr={*} self={*}\n", &self.interface, &self);
-            self.interface.actor_offset = @ptrToInt(&self.interface) - @ptrToInt(&self);
             self.interface.processMessage = BodyType.processMessage;
             BodyType.init(&self);
             return self;
@@ -30,7 +28,7 @@ pub fn Actor(comptime BodyType: type) type {
 
         /// Return a pointer to the Actor this interface is a member of.
         pub fn getActorPtr(aiPtr: *ActorInterface) *Self {
-            return @intToPtr(*Self, @ptrToInt(aiPtr) - aiPtr.actor_offset);
+            return @fieldParentPtr(Self, "interface", aiPtr);
         }
     };
 }
@@ -98,6 +96,7 @@ const MyActorBody = packed struct {
     }
 
     pub fn processMessage(aiPtr: *ActorInterface, msg: *Message) void {
+        //var self = @fieldParentPtr(Self, "interface", aiPtr);
         var self = Actor(MyActorBody).getActorPtr(aiPtr);
         //warn("processMessage: aiPtr={*} self={*}\n", aiPtr, self);
         self.body.count += msg.cmd;

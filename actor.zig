@@ -18,7 +18,7 @@ pub const ActorInterface = packed struct {
 /// Type Constructor.
 pub fn Actor(comptime BodyType: type) type {
     return packed struct {
-        const Self = this;
+        const Self = @This();
 
         pub interface: ActorInterface,
         pub body: BodyType,
@@ -41,7 +41,7 @@ pub fn Actor(comptime BodyType: type) type {
 /// Dispatches messages to actors
 pub fn ActorDispatcher(comptime maxActors: usize) type {
     return struct {
-        const Self = this;
+        const Self = @This();
 
         pub queue: Queue(*Message),
         pub msg_count: u64,
@@ -92,7 +92,7 @@ pub const Message = struct {
 
 /// An ActorBody which must implement init and processMessage
 const MyActorBody = packed struct {
-    const Self = this;
+    const Self = @This();
 
     pub count: usize,
 
@@ -133,6 +133,7 @@ test "Actor" {
     var node0 = @typeOf(dispatcher.queue).Node {
         .data = &msg,
         .next = undefined,
+        .prev = undefined,
     };
 
     // Place the node on the queue and broadcast to the actors
